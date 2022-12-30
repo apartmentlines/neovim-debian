@@ -20,6 +20,7 @@ mv neovim-${version}/.git .
 tar -czvf neovim_${version}.orig.tar.gz neovim-${version}
 mv .git neovim-${version}/
 cd neovim-${version}
+git checkout v${version}
 git clone https://github.com/apartmentlines/neovim-debian.git debian
 # Hack, edit the Makefile to remove all targets from the test: target.
 sed -i 's/^test:.*$/test:/g' Makefile
