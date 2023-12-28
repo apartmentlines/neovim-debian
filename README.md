@@ -4,7 +4,7 @@ Needed a standalone Neovim package for an older Debian release, but a newer Neov
 
 These are the skeleton files that should live in the `debian` directory to build the Neovim .deb file.
 
-# Configuration
+## Configuration
 
 ```sh
 export version=0.9.4
@@ -25,3 +25,8 @@ git checkout v${version}
 git clone https://github.com/apartmentlines/neovim-debian.git debian
 DEB_BUILD_OPTIONS=nocheck debuild --no-lintian -i -us -uc -b -nc
 ```
+
+## To bump the version
+
+1. Change the `version` variable in the export command above.
+2. Add the new version to the top of the changelog file in this repository.
