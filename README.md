@@ -7,7 +7,7 @@ These are the skeleton files that should live in the `debian` directory to build
 # Configuration
 
 ```sh
-export version=0.8.2
+export version=0.9.4
 export build_dir=/tmp/build
 # Debian build deps.
 apt-get install -y build-essential devscripts debhelper
