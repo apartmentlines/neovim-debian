@@ -1,3 +1,8 @@
+neovim (0.11.1-1) unstable; urgency=medium
+
+  * Custom build for bookworm
+
+ -- Chad Phillips <chad@apartmentlines.com>  Wed, 7 May 2025 14:10:11 -0400
 neovim (0.9.4-1) unstable; urgency=medium
 
   * Custom build for bookworm
