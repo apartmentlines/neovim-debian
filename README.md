@@ -14,28 +14,7 @@ git push origin main
 git push origin v0.11.7
 ```
 
-Pushing the tag starts the GitHub Actions release workflow, which builds Debian 12 and Debian 13 packages and uploads them to the GitHub release.
-
-## Configuration
-
-```sh
-export version=0.11.5
-export build_dir=/tmp/build
-# Debian build deps.
-apt-get install -y build-essential devscripts debhelper equivs fakeroot pkgconf
-# Neovim build deps.
-apt-get install -y ninja-build gettext libtool libtool-bin autoconf automake cmake g++ unzip curl doxygen
-rm -rf ${build_dir} && mkdir -p ${build_dir} && cd ${build_dir}
-git clone https://github.com/neovim/neovim neovim-${version}
-mv neovim-${version}/.git .
-tar -czvf neovim_${version}.orig.tar.gz neovim-${version}
-mv .git neovim-${version}/
-cd neovim-${version}
-git checkout v${version}
-git clone https://github.com/apartmentlines/neovim-debian.git packaging
-cp -a packaging/debian .
-DEB_BUILD_OPTIONS=nocheck debuild --no-lintian -i -us -uc -b -nc
-```
+Pushing the tag starts the GitHub Actions release workflow, which builds Debian packages and uploads them to the GitHub release.
 
 ## To bump the version
 
