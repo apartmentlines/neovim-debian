@@ -2,7 +2,7 @@
 
 Needed a standalone Neovim package for an older Debian release, but a newer Neovim version.
 
-These are the skeleton files that should live in the `debian` directory to build the Neovim .deb file.
+This repository contains the `debian` directory used to build Neovim `.deb` files from upstream Neovim release tags.
 
 ## Release process
 
@@ -32,7 +32,8 @@ tar -czvf neovim_${version}.orig.tar.gz neovim-${version}
 mv .git neovim-${version}/
 cd neovim-${version}
 git checkout v${version}
-git clone https://github.com/apartmentlines/neovim-debian.git debian
+git clone https://github.com/apartmentlines/neovim-debian.git packaging
+cp -a packaging/debian .
 DEB_BUILD_OPTIONS=nocheck debuild --no-lintian -i -us -uc -b -nc
 ```
 

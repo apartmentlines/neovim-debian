@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly CHANGELOG_FILE="changelog"
+readonly CHANGELOG_FILE="debian/changelog"
 readonly PACKAGE_NAME="neovim"
 readonly MAINTAINER="Chad Phillips <chad@apartmentlines.com>"
 readonly UPSTREAM_REPO="https://github.com/neovim/neovim.git"

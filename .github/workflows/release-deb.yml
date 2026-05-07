@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
 
           version="${GITHUB_REF_NAME#v}"
-          changelog_version="$(sed -n '1s/^.*(\([^)]*\)).*$/\1/p' changelog)"
+          changelog_version="$(sed -n '1s/^.*(\([^)]*\)).*$/\1/p' debian/changelog)"
 
           if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
             echo "Release tag must use semver with a leading v: ${GITHUB_REF_NAME}"
@@ -138,10 +138,7 @@ jobs:
             "neovim-${version}"
 
           rsync -a \
-            --exclude .git \
-            --exclude .github \
-            --exclude 'dist' \
-            "${GITHUB_WORKSPACE}/" \
+            "${GITHUB_WORKSPACE}/debian/" \
             "${source_dir}/debian/"
 
       - name: Install package build dependencies
