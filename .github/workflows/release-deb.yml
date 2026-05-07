@@ -1,0 +1,240 @@
+name: Build Debian packages and release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify-tag-source:
+    name: Verify Neovim release tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify release version metadata
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME#v}"
+          changelog_version="$(sed -n '1s/^.*(\([^)]*\)).*$/\1/p' changelog)"
+
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+            echo "Release tag must use semver with a leading v: ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
+          if [ "${changelog_version}" != "${version}-1" ]; then
+            echo "Debian changelog version ${changelog_version} does not match expected version ${version}-1."
+            exit 1
+          fi
+
+      - name: Verify tag is reachable from main
+        run: |
+          set -euo pipefail
+
+          git fetch origin main
+
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "Tag ${GITHUB_REF_NAME} does not point to a commit reachable from main."
+            exit 1
+          fi
+
+      - name: Verify upstream Neovim tag exists
+        run: |
+          set -euo pipefail
+
+          if ! git ls-remote --exit-code --tags https://github.com/neovim/neovim.git "refs/tags/${GITHUB_REF_NAME}" >/dev/null; then
+            echo "Upstream Neovim tag does not exist: ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.debian.name }} package
+    needs: verify-tag-source
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        debian:
+          - name: debian12
+            image: debian:12
+          - name: debian13
+            image: debian:13
+
+    container:
+      image: ${{ matrix.debian.image }}
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: Install base tools
+        run: |
+          set -euo pipefail
+
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            git \
+            gzip \
+            rsync \
+            tar \
+            xz-utils
+
+      - name: Check out Debian packaging
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Trust checked-out packaging directory
+        run: |
+          set -euo pipefail
+
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Install Debian packaging tools
+        run: |
+          set -euo pipefail
+
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            debhelper \
+            devscripts \
+            equivs \
+            fakeroot \
+            lintian \
+            pkgconf
+
+      - name: Prepare upstream Neovim source
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME#v}"
+          build_root="/tmp/neovim-package-build"
+          source_dir="${build_root}/neovim-${version}"
+
+          rm -rf "${build_root}"
+          mkdir -p "${build_root}"
+
+          git clone --branch "${GITHUB_REF_NAME}" --depth 1 https://github.com/neovim/neovim.git "${source_dir}"
+          tar \
+            --exclude-vcs \
+            -C "${build_root}" \
+            -czf "${build_root}/neovim_${version}.orig.tar.gz" \
+            "neovim-${version}"
+
+          rsync -a \
+            --exclude .git \
+            --exclude .github \
+            --exclude 'dist' \
+            "${GITHUB_WORKSPACE}/" \
+            "${source_dir}/debian/"
+
+      - name: Install package build dependencies
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME#v}"
+          cd "/tmp/neovim-package-build/neovim-${version}"
+
+          mk-build-deps \
+            --install \
+            --remove \
+            --tool "apt-get -y --no-install-recommends" \
+            debian/control
+
+      - name: Build Debian binary packages
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME#v}"
+          cd "/tmp/neovim-package-build/neovim-${version}"
+
+          DEB_BUILD_OPTIONS=nocheck dpkg-buildpackage -us -uc -b
+
+      - name: Collect package artifacts
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME#v}"
+          build_root="/tmp/neovim-package-build"
+
+          mkdir -p "dist/${{ matrix.debian.name }}"
+
+          while IFS= read -r -d '' artifact; do
+            filename="${artifact##*/}"
+            extension="${filename##*.}"
+            stem="${filename%.*}"
+            arch="${stem##*_}"
+            prefix="${stem%_*}"
+
+            cp -v \
+              "${artifact}" \
+              "dist/${{ matrix.debian.name }}/${prefix}_${{ matrix.debian.name }}_${arch}.${extension}"
+          done < <(
+            find "${build_root}" -maxdepth 1 -type f \
+              \( -name "*.deb" -o -name "*.changes" -o -name "*.buildinfo" \) \
+              -print0
+          )
+
+          ls -lh "dist/${{ matrix.debian.name }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: neovim-${{ matrix.debian.name }}-${{ github.ref_name }}
+          path: dist/${{ matrix.debian.name }}/*
+          if-no-files-found: error
+
+  release:
+    name: Create release and upload packages
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: release-assets
+          merge-multiple: false
+
+      - name: Show release assets
+        run: |
+          set -euo pipefail
+          find release-assets -maxdepth 3 -type f -print -exec ls -lh {} \;
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes
+
+      - name: Upload Debian packages to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh release upload "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            release-assets/**/* \
+            --clobber
